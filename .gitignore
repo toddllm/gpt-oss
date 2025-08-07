@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Model files (too large for git)
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+*.onnx
+model-*.safetensors
+*.whl
+
+# Data files
+*.jsonl
+*.json
+finetune_data/
+test_data/
+
+# Logs and temporary files
+*.log
+*.pid
+*.part
+*.tmp
+*.temp
+download_*.log
+test_*.log
+run_*.log
+monitor_*.log
+benchmark_results_*.txt
+optimization_results.json
+
+# VLLM (work in progress)
+vllm*/
+vllm-gptoss/
+gpt-oss-20b-final/
+gpt-oss-20b-git/
+gpt-oss-20b-working/
+gpt-oss-20b/
+gpt-oss-repo/
+gpt_oss_repo/
+clean_model/
+models/
+triton_kernels*/
+
+# System files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Exclude large directories
+gpt-oss-120b/
+gpt-oss-20b/
+metal/
+original/
+_build/
+
+# Keep specific files
+!ollama/*.py
+!ollama/*.sh
+!ollama/*.md
+!Modelfile
