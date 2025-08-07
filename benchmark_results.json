@@ -1,0 +1,44 @@
+{
+  "gpt-oss:latest": {
+    "channels": {
+      "analysis": false,
+      "commentary": false,
+      "final": false
+    },
+    "correct": true,
+    "sample": "<assistant>\nWe need to sum the first 6 prime numbers: 2+3+5+7+11+13 = 41? Let's calculate: 2+3=5, +5=10, +7=17, +11=28, +13=41. Yes 41. Provide answer.<|end|><assistant<|channel|>final>\nThe sum of the",
+    "performance": {
+      "avg_time": 1.4,
+      "avg_tokens": 108.0,
+      "tok_per_sec": 77.4
+    }
+  },
+  "gpt-oss-harmony": {
+    "channels": {
+      "analysis": false,
+      "commentary": false,
+      "final": false
+    },
+    "correct": true,
+    "sample": "<assistant>\nWe need to sum the first 6 prime numbers: 2+3+5+7+11+13 = 41? Let's calculate: 2+3=5, +5=10, +7=17, +11=28, +13=41. Yes 41. Provide answer.",
+    "performance": {
+      "avg_time": 0.89,
+      "avg_tokens": 68.0,
+      "tok_per_sec": 76.4
+    }
+  },
+  "gpt-oss-optimized": {
+    "channels": {
+      "analysis": false,
+      "commentary": false,
+      "final": false
+    },
+    "correct": true,
+    "sample": "<assistant>\nWe need to sum the first 6 prime numbers: 2+3+5+7+11+13 = 41? Let's calculate: 2+3=5, +5=10, +7=17, +11=28, +13=41. Yes 41. Provide answer.",
+    "performance": {
+      "avg_time": 0.89,
+      "avg_tokens": 68.0,
+      "tok_per_sec": 76.1
+    }
+  }
+}

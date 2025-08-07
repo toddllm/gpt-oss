@@ -1,0 +1,11 @@
+# Modelfile.harmony - Restore native Harmony format
+FROM gpt-oss:latest
+
+# Disable Ollama's template wrapping completely
+TEMPLATE ""
+SYSTEM ""
+
+# Keep the original special tokens
+PARAMETER stop "<|end|>"
+PARAMETER num_ctx 8192
+PARAMETER temperature 0.7
