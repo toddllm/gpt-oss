@@ -1,0 +1,41 @@
+[
+  {
+    "query": "Calculate the factorial of 10",
+    "expected_tool": "python",
+    "has_call_tool": false,
+    "has_tool_mention": false,
+    "has_code": true,
+    "has_code_block": false,
+    "has_json_pattern": false,
+    "found_keywords": 2,
+    "total_keywords": 5,
+    "response_length": 830,
+    "time_seconds": 4.11
+  },
+  {
+    "query": "What is 15% of 240?",
+    "expected_tool": "calculator",
+    "has_call_tool": false,
+    "has_tool_mention": false,
+    "has_code": true,
+    "has_code_block": false,
+    "has_json_pattern": false,
+    "found_keywords": 4,
+    "total_keywords": 4,
+    "response_length": 318,
+    "time_seconds": 1.46
+  },
+  {
+    "query": "Generate the first 10 prime numbers",
+    "expected_tool": "python",
+    "has_call_tool": false,
+    "has_tool_mention": false,
+    "has_code": false,
+    "has_code_block": false,
+    "has_json_pattern": false,
+    "found_keywords": 11,
+    "total_keywords": 11,
+    "response_length": 5913,
+    "time_seconds": 26.17
+  }
+]

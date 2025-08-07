@@ -1,0 +1,26 @@
+{
+  "low": {
+    "response_length": 1094,
+    "tokens_generated": 343,
+    "prompt_tokens": 73,
+    "time_seconds": 4.63,
+    "model_time": 4.62,
+    "tokens_per_second": 74.16
+  },
+  "medium": {
+    "response_length": 899,
+    "tokens_generated": 288,
+    "prompt_tokens": 73,
+    "time_seconds": 3.67,
+    "model_time": 3.67,
+    "tokens_per_second": 78.51
+  },
+  "high": {
+    "response_length": 910,
+    "tokens_generated": 276,
+    "prompt_tokens": 73,
+    "time_seconds": 3.5,
+    "model_time": 3.5,
+    "tokens_per_second": 78.82
+  }
+}

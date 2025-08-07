@@ -1,0 +1,191 @@
+{
+  "low": {
+    "results": [
+      {
+        "question": "What year did the Apollo 11 mission land on the moon?",
+        "expected": "1969",
+        "correct": true,
+        "time": 1.02,
+        "response": "We need to answer: Apollo 11 landed on the moon on July 20, 1969. Provide answer. Also maybe mention year 1969. Let's produce.<|end|><|start|>assistan"
+      },
+      {
+        "question": "What is the capital of Australia?",
+        "expected": "Canberra",
+        "correct": true,
+        "time": 0.6,
+        "response": "We need to answer: \"What is the capital of Australia?\" The answer: Canberra.<|end|><|start|>assistant<|channel|>final<|message|>The capital of Austral"
+      },
+      {
+        "question": "Who wrote the novel '1984'?",
+        "expected": "George Orwell",
+        "correct": true,
+        "time": 0.59,
+        "response": "We need to answer: Who wrote the novel '1984'? The answer: George Orwell. Provide concise answer.<|end|><|start|>assistant<|channel|>final<|end|>Georg"
+      },
+      {
+        "question": "What is the chemical symbol for gold?",
+        "expected": "Au",
+        "correct": true,
+        "time": 1.82,
+        "response": "The chemical symbol for **Gold**..??...\nWe need to respond to user: \"What is the chemical symbol for gold?\" The user asked. The assistant responded in"
+      },
+      {
+        "question": "How many continents are there?",
+        "expected": "7",
+        "correct": true,
+        "time": 2.13,
+        "response": "We have to respond with a single word? Wait: The instruction says: \"You are ChatGPT, a large language model trained by OpenAI. ... The assistant shoul"
+      },
+      {
+        "question": "What is the speed of light in vacuum (approximately)?",
+        "expected": "299,792,458 m/s or 3\u00d710^8 m/s",
+        "correct": true,
+        "time": 1.52,
+        "response": "We need to answer: speed of light in vacuum approximately. Provide value: 299,792,458 m/s exactly defined. But approximate: 3.0 \u00d7 10^8 m/s. Provide an"
+      },
+      {
+        "question": "Who painted the Mona Lisa?",
+        "expected": "Leonardo da Vinci",
+        "correct": true,
+        "time": 1.62,
+        "response": "The first question? The **?** ...? Wait... ...??...\nWe need to respond. The user: \"Who painted the Mona Lisa?\" The assistant should answer: Leonardo d"
+      },
+      {
+        "question": "What is the largest planet in our solar system?",
+        "expected": "Jupiter",
+        "correct": true,
+        "time": 1.01,
+        "response": "The largest planet in ...? ...? ...? ...? \nWe need to respond. The user asks: \"What is the largest planet in our solar system?\" The answer: Jupiter. W"
+      }
+    ],
+    "correct": 8,
+    "total": 8,
+    "accuracy": 1.0
+  },
+  "medium": {
+    "results": [
+      {
+        "question": "What year did the Apollo 11 mission land on the moon?",
+        "expected": "1969",
+        "correct": true,
+        "time": 0.95,
+        "response": "We need to answer: Apollo 11 landed on the moon on July 20, 1969. Provide answer. Also maybe mention year 1969. Provide concise.<|end|><|start|>assist"
+      },
+      {
+        "question": "What is the capital of Australia?",
+        "expected": "Canberra",
+        "correct": true,
+        "time": 0.55,
+        "response": "We need to answer: \"What is the capital of Australia?\" The capital is Canberra. Provide answer.<|end|><|start|>assistant<|channel|>final<|end|> Canber"
+      },
+      {
+        "question": "Who wrote the novel '1984'?",
+        "expected": "George Orwell",
+        "correct": true,
+        "time": 0.58,
+        "response": "We need to answer: Who wrote the novel '1984'? The answer: George Orwell. Provide concise.<|end|><|start|>assistant<|channel|>final<|end|>George Orwel"
+      },
+      {
+        "question": "What is the chemical symbol for gold?",
+        "expected": "Au",
+        "correct": true,
+        "time": 3.4,
+        "response": "The chemical symbol for **Gold**..?????\n\nThe chemical symbol for gold is **Au**.\n\nThe chemical symbol for gold is **Au**.\n\nCorrect! The chemical symbo"
+      },
+      {
+        "question": "How many continents are there?",
+        "expected": "7",
+        "correct": true,
+        "time": 1.04,
+        "response": "We have to respond with a single word? The instruction: \"Respond with only a single word.\" So answer: \"Seven\". But single word: \"Seven\". That is a wor"
+      },
+      {
+        "question": "What is the speed of light in vacuum (approximately)?",
+        "expected": "299,792,458 m/s or 3\u00d710^8 m/s",
+        "correct": true,
+        "time": 2.0,
+        "response": "We need to answer: speed of light in vacuum approximately. The speed of light in vacuum is about 299,792,458 m/s exactly (by definition). But approxim"
+      },
+      {
+        "question": "Who painted the Mona Lisa?",
+        "expected": "Leonardo da Vinci",
+        "correct": false,
+        "time": 1.4,
+        "response": "The first question: \"Who painted ...\". The answer: ...? Wait......? ...? \nWe need..?? \nWe?...? \nWe...??? \nWe\u2026...? \nWe...??? ...? \n...???? \nWe have...?"
+      },
+      {
+        "question": "What is the largest planet in our solar system?",
+        "expected": "Jupiter",
+        "correct": true,
+        "time": 1.01,
+        "response": "The largest planet in...??...??? ...? ...? ...? \nWe need to answer the question: \"What is the largest planet in our solar system?\" The correct answer:"
+      }
+    ],
+    "correct": 7,
+    "total": 8,
+    "accuracy": 0.875
+  },
+  "high": {
+    "results": [
+      {
+        "question": "What year did the Apollo 11 mission land on the moon?",
+        "expected": "1969",
+        "correct": true,
+        "time": 1.14,
+        "response": "We need to answer: \"What year did the Apollo 11 mission land on the moon?\" The answer: 1969. Provide concise answer. Also maybe mention date: July 20,"
+      },
+      {
+        "question": "What is the capital of Australia?",
+        "expected": "Canberra",
+        "correct": true,
+        "time": 0.56,
+        "response": "We need to answer: capital of Australia is Canberra. Provide concise.<|end|><|start|>assistant<|channel|>final<|message|>The capital of Australia is *"
+      },
+      {
+        "question": "Who wrote the novel '1984'?",
+        "expected": "George Orwell",
+        "correct": true,
+        "time": 0.78,
+        "response": "We need to answer: Who wrote the novel '1984'? The answer: George Orwell. Provide concise.<|end|><|start|>assistant<|channel|>final<|end|>George Orwel"
+      },
+      {
+        "question": "What is the chemical symbol for gold?",
+        "expected": "Au",
+        "correct": true,
+        "time": 0.8,
+        "response": "The chemical symbol for gold?  ...?  \nWe need to answer: \"What is the chemical symbol for gold?\" The symbol is Au. Provide answer.<|end|><|start|>assi"
+      },
+      {
+        "question": "How many continents are there?",
+        "expected": "7",
+        "correct": true,
+        "time": 0.9,
+        "response": "We have to respond with a short answer. The user asks: \"How many continents are there?\" The answer: 7 continents. The user wants a short answer. So we"
+      },
+      {
+        "question": "What is the speed of light in vacuum (approximately)?",
+        "expected": "299,792,458 m/s or 3\u00d710^8 m/s",
+        "correct": true,
+        "time": 1.93,
+        "response": "We need to answer: speed of light in vacuum approximately. Provide value: 299,792,458 m/s exactly defined. But approximate: 3.0 \u00d7 10^8 m/s. Provide ex"
+      },
+      {
+        "question": "Who painted the Mona Lisa?",
+        "expected": "Leonardo da Vinci",
+        "correct": true,
+        "time": 1.22,
+        "response": "The\u00a0\u2026\u00a0?\u00a0...\nWe need to respond to user: \"Who painted the Mona Lisa?\" The user expects an answer. The assistant should answer: Leonardo da Vinci. But w"
+      },
+      {
+        "question": "What is the largest planet in our solar system?",
+        "expected": "Jupiter",
+        "correct": true,
+        "time": 2.05,
+        "response": "The largest planet in...??...??........??\u2026???\u2026??\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026?\u2026..???\u2026?\u2026?\u2026..\u2026\u2026?\u2026....?\u2026\u2026?..?\u2026\u2026..\u2026?\u2026..?\u2026\u2026..?\u2026???\u2026....??\u2026??\u2026\u2026\u2026..\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026?\u2026..\u2026..????"
+      }
+    ],
+    "correct": 8,
+    "total": 8,
+    "accuracy": 1.0
+  }
+}

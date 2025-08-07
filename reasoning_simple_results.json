@@ -1,0 +1,20 @@
+{
+  "low": {
+    "tokens": 1024,
+    "time": 13.06,
+    "correct": true,
+    "response": "We need to compute 15% of 240. 15% = 0.15. 0.15 * 240 = 36. So answer: 36. The user wants? They asked: \"What is 15% of 240?\" So answer: 36. \nWe should provide final answer. \nWe can also explain. \nWe n"
+  },
+  "medium": {
+    "tokens": 1024,
+    "time": 12.87,
+    "correct": true,
+    "response": "We need to compute 15% of 240. 15% = 0.15. 0.15 * 240 = 36. So answer: 36. The user wants? The user asked: \"What is 15% of 240?\" The answer: 36. \nWe need to produce final answer. \nWe should just answe"
+  },
+  "high": {
+    "tokens": 0,
+    "time": 2.1,
+    "correct": true,
+    "response": "We need to compute 15% of 240. 15% = 0.15. 0.15 * 240 = 36. So the answer: 36. The user wants? The user asked: \"What is 15% of ...\". So answer: 36. \nWe need? The? \nWe can? \nWe.. \nWe.. \nWe.. \nWe.. \nWe."
+  }
+}

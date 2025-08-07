@@ -1,0 +1,40 @@
+{
+  "main_test": {
+    "context_size": 10973,
+    "results": [
+      {
+        "question": "What is the secret code mentioned in Chapter 42?",
+        "expected": "ALPHA-BRAVO-2024",
+        "correct": true,
+        "time_seconds": 3.01,
+        "response_length": 263,
+        "response_preview": "The user asks: \"What is the secret code mentioned in Chapter 42?\" The document says: \"The secret code for this document is: ALPHA-BRAVO-2024.\" So answer: ALPHA-BRAVO-2024.<|end|><|start|>assistant<|ch"
+      },
+      {
+        "question": "What chapter contains the secret code?",
+        "expected": "42",
+        "correct": true,
+        "time_seconds": 1.33,
+        "response_length": 413,
+        "response_preview": "The user provided a long document with many chapters. They ask: \"What chapter contains the secret code?\" We need to identify the chapter that contains the secret code. The secret code is \"ALPHA-BRAVO-"
+      }
+    ]
+  },
+  "scaling_test": [
+    {
+      "context_size": 1000,
+      "time": 1.57,
+      "found_answer": true
+    },
+    {
+      "context_size": 5000,
+      "time": 4.31,
+      "found_answer": false
+    },
+    {
+      "context_size": 10000,
+      "time": 4.88,
+      "found_answer": true
+    }
+  ]
+}

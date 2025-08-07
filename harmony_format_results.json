@@ -1,0 +1,29 @@
+[
+  {
+    "query": "Solve: If 2x + 5 = 13, what is x?",
+    "has_analysis": false,
+    "has_commentary": false,
+    "has_final": false,
+    "all_channels": false,
+    "response_length": 983,
+    "time_seconds": 4.75
+  },
+  {
+    "query": "What causes tides on Earth?",
+    "has_analysis": false,
+    "has_commentary": false,
+    "has_final": false,
+    "all_channels": false,
+    "response_length": 1170,
+    "time_seconds": 3.25
+  },
+  {
+    "query": "Write a Python function to check if a number is prime",
+    "has_analysis": false,
+    "has_commentary": false,
+    "has_final": false,
+    "all_channels": false,
+    "response_length": 4298,
+    "time_seconds": 15.52
+  }
+]
