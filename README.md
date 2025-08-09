@@ -117,6 +117,12 @@ cd ollama
 python3 test_gpt_oss_capabilities.py --model gpt-oss:latest
 ```
 
+### Quick Start on Android (Termux + llama.cpp)
+
+For running GPT‑OSS locally on Android using Termux and llama.cpp, see the step‑by‑step guide:
+
+- [Android Termux: GPT‑OSS Setup (Working Path + Usability Tweaks)](docs/Android-Termux-GPT-OSS-Setup.md)
+
 ### Python Requirements
 ```bash
 pip install requests  # For API clients
@@ -184,6 +190,8 @@ python3 ollama/prepare_finetune.py --samples 1000
 ```
 gpt-oss/
 ├── README.md                   # This file
+├── docs/                       # Documentation
+│   └── Android-Termux-GPT-OSS-Setup.md
 ├── Modelfile                   # Ollama model configuration
 ├── .gitignore                  # Excludes large files
 └── ollama/                     # Ollama-specific tools
