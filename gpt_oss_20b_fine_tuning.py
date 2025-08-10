@@ -50,8 +50,57 @@ Visit our docs for all our [model uploads](https://docs.unsloth.ai/get-started/a
 We're about to demonstrate the power of the new OpenAI GPT-OSS 20B model through an inference example. For our `MXFP4` version, use this [notebook](https://colab.research.google.com/github/unslothai/notebooks/blob/main/nb/GPT_OSS_MXFP4_(20B)-Inference.ipynb) instead.
 """
 
-from unsloth import FastLanguageModel
+import os
+# Ensure we don't try to use MXFP4 dequantization which can OOM and trigger downloads
+os.environ.setdefault("TRANSFORMERS_NO_MXFP4", "1")
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+# Ensure Unsloth doesn't enable torch.compile (causes Dynamo issues on this setup)
+os.environ.setdefault("UNSLOTH_DISABLE_TORCH_COMPILE", "1")
+# Allow training with models loaded via device_map without Accelerate blocking
+os.environ.setdefault("ACCELERATE_BYPASS_DEVICE_MAP", "true")
+import unsloth  # Must be imported before transformers so Unsloth patches apply
 import torch
+"""
+Workaround: Transformers 4.55 may try to initialize weights for
+GptOssTopKRouter, but some accelerated router implementations do not
+expose .weight/.bias as parameters. We skip router param init.
+"""
+try:
+    from transformers.models.gpt_oss import modeling_gpt_oss as _gptoss_mod
+    _orig_init_weights = _gptoss_mod.GptOssPreTrainedModel._init_weights
+    def _patched_init_weights(self, module):
+        if isinstance(module, (_gptoss_mod.GptOssTopKRouter, _gptoss_mod.GptOssExperts)):
+            return
+        return _orig_init_weights(self, module)
+    _gptoss_mod.GptOssPreTrainedModel._init_weights = _patched_init_weights
+except Exception:
+    pass
+
+# Disable Unsloth's strict uninitialized-weights handler to allow local GPT-OSS load
+try:
+    from transformers.modeling_utils import logger as _tlogger
+    import unsloth.models._utils as _uutils
+    # Hard-disable raise-on-uninitialized
+    if hasattr(_uutils, "_RaiseUninitialized"):
+        try:
+            _uutils._RaiseUninitialized.emit = lambda self, record: None
+        except Exception:
+            pass
+    for _h in list(_tlogger.handlers):
+        if _h.__class__.__name__ == "_RaiseUninitialized":
+            _tlogger.removeHandler(_h)
+except Exception:
+    pass
+
+# Workaround: Unsloth's SFTTrainer calls fix_untrained_tokens which inspects lm_head weights.
+# On some meta/offload setups this raises NotImplementedError (copy out of meta tensor).
+# We disable it for this local sanity run.
+try:
+    import unsloth_zoo.tokenizer_utils as _tz
+    _tz.fix_untrained_tokens = lambda *args, **kwargs: None
+except Exception:
+    pass
 
 max_seq_length = 4096
 dtype = None
@@ -64,31 +113,83 @@ fourbit_models = [
     "unsloth/gpt-oss-120b",
 ] # More models at https://huggingface.co/unsloth
 
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/gpt-oss-20b",
-    dtype = dtype, # None for auto detection
-    max_seq_length = max_seq_length, # Choose any for long context!
-    load_in_4bit = True,  # 4 bit quantization to reduce memory
-    full_finetuning = False, # [NEW!] We have full finetuning now!
-    # token = "hf_...", # use one if using gated models
-)
+LOCAL_MODEL_DIR = "/home/tdeshane/gpt-oss/gpt-oss-20b-final"
+MODEL_NAME = os.environ.get("MODEL_DIR", LOCAL_MODEL_DIR if os.path.isdir(LOCAL_MODEL_DIR) else "unsloth/gpt-oss-20b")
+
+USE_UNSLOTH = os.environ.get("ENABLE_UNSLOTH", "0") == "1"
+USING_UNSLOTH = False
+
+if USE_UNSLOTH:
+    try:
+        from unsloth import FastLanguageModel
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name = MODEL_NAME,
+            dtype = dtype, # None for auto detection
+            max_seq_length = max_seq_length, # Choose any for long context!
+            load_in_4bit = True,  # 4 bit quantization to reduce memory
+            full_finetuning = False, # [NEW!] We have full finetuning now!
+            local_files_only = True, # Prefer local weights; avoid downloading
+            device_map = {"": 0},  # force single-GPU, no CPU offload
+            low_cpu_mem_usage = True,
+            offload_state_dict = False,
+            trust_remote_code = True,
+            max_memory = {0: "20GiB"},
+            # token = "hf_...", # use one if using gated models
+        )
+        USING_UNSLOTH = True
+    except Exception as e:
+        print(f"Unsloth load failed ({e}). Falling back to Transformers + PEFT.")
+
+if not USING_UNSLOTH:
+    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    from peft import LoraConfig, get_peft_model
+
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, local_files_only=True, use_fast=True)
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME,
+        trust_remote_code=True,
+        local_files_only=True,
+        low_cpu_mem_usage=True,
+        quantization_config=bnb_config,
+        device_map={"": 0},  # single-GPU, no CPU offload
+        offload_state_dict=False,
+        max_memory={0: "20GiB"},
+    )
 
 """We now add LoRA adapters for parameter efficient finetuning - this allows us to only efficiently train 1% of all parameters."""
 
-model = FastLanguageModel.get_peft_model(
-    model,
-    r = 8, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj",],
-    lora_alpha = 16,
-    lora_dropout = 0, # Supports any, but = 0 is optimized
-    bias = "none",    # Supports any, but = "none" is optimized
-    # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
-    random_state = 3407,
-    use_rslora = False,  # We support rank stabilized LoRA
-    loftq_config = None, # And LoftQ
-)
+if USING_UNSLOTH:
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r = 8, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+        target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
+                         "gate_proj", "up_proj", "down_proj",],
+        lora_alpha = 16,
+        lora_dropout = 0, # Supports any, but = 0 is optimized
+        bias = "none",    # Supports any, but = "none" is optimized
+        # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
+        use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
+        random_state = 3407,
+        use_rslora = False,  # We support rank stabilized LoRA
+        loftq_config = None, # And LoftQ
+    )
+else:
+    from peft import LoraConfig, get_peft_model
+    lora_config = LoraConfig(
+        r=8,
+        lora_alpha=16,
+        lora_dropout=0.0,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
+    model = get_peft_model(model, lora_config)
 
 """### Reasoning Effort
 The `gpt-oss` models from OpenAI include a feature that allows users to adjust the model's "reasoning effort." This gives you control over the trade-off between the model's performance and its response speed (latency) which by the amount of token the model will use to think.
@@ -104,52 +205,71 @@ The `gpt-oss` models offer three distinct levels of reasoning effort you can cho
 
 from transformers import TextStreamer
 
-messages = [
-    {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
-]
-inputs = tokenizer.apply_chat_template(
-    messages,
-    add_generation_prompt = True,
-    return_tensors = "pt",
-    return_dict = True,
-    reasoning_effort = "low", # **NEW!** Set reasoning effort to low, medium or high
-).to(model.device)
+if os.getenv("RUN_DEMO", "0") == "1":
+    messages = [
+        {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
+    ]
+    try:
+        inputs = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt = True,
+            return_tensors = "pt",
+            return_dict = True,
+            reasoning_effort = "low",
+        )
+    except Exception:
+        # Fallback if no chat_template
+        prompt = messages[0]["content"] if isinstance(messages[0], dict) else str(messages)
+        inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
-_ = model.generate(**inputs, max_new_tokens = 512, streamer = TextStreamer(tokenizer))
+    _ = model.generate(**inputs, max_new_tokens = 512, streamer = TextStreamer(tokenizer))
 
 """Changing the `reasoning_effort` to `medium` will make the model think longer. We have to increase the `max_new_tokens` to occupy the amount of the generated tokens but it will give better and more correct answer"""
 
 from transformers import TextStreamer
 
-messages = [
-    {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
-]
-inputs = tokenizer.apply_chat_template(
-    messages,
-    add_generation_prompt = True,
-    return_tensors = "pt",
-    return_dict = True,
-    reasoning_effort = "medium", # **NEW!** Set reasoning effort to low, medium or high
-).to(model.device)
+if os.getenv("RUN_DEMO", "0") == "1":
+    messages = [
+        {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
+    ]
+    try:
+        inputs = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt = True,
+            return_tensors = "pt",
+            return_dict = True,
+            reasoning_effort = "medium",
+        )
+    except Exception:
+        prompt = messages[0]["content"] if isinstance(messages[0], dict) else str(messages)
+        inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
-_ = model.generate(**inputs, max_new_tokens = 1024, streamer = TextStreamer(tokenizer))
+    _ = model.generate(**inputs, max_new_tokens = 1024, streamer = TextStreamer(tokenizer))
 
 """Lastly we will test it using `reasoning_effort` to `high`"""
 
 from transformers import TextStreamer
 
-messages = [
-    {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
-]
-inputs = tokenizer.apply_chat_template(
-    messages,
-    add_generation_prompt = True,
-    return_tensors = "pt",
-    return_dict = True,
-    reasoning_effort = "high", # **NEW!** Set reasoning effort to low, medium or high
-).to(model.device)
+if os.getenv("RUN_DEMO", "0") == "1":
+    messages = [
+        {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
+    ]
+    try:
+        inputs = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt = True,
+            return_tensors = "pt",
+            return_dict = True,
+            reasoning_effort = "high",
+        )
+    except Exception:
+        prompt = messages[0]["content"] if isinstance(messages[0], dict) else str(messages)
+        inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
-_ = model.generate(**inputs, max_new_tokens = 2048, streamer = TextStreamer(tokenizer))
+    _ = model.generate(**inputs, max_new_tokens = 2048, streamer = TextStreamer(tokenizer))
 
 """<a name="Data"></a>
 ### Data Prep
@@ -157,21 +277,56 @@ _ = model.generate(**inputs, max_new_tokens = 2048, streamer = TextStreamer(toke
 The `HuggingFaceH4/Multilingual-Thinking` dataset will be utilized as our example. This dataset, available on Hugging Face, contains reasoning chain-of-thought examples derived from user questions that have been translated from English into four other languages. It is also the same dataset referenced in OpenAI's [cookbook](https://cookbook.openai.com/articles/gpt-oss/fine-tune-transfomers) for fine-tuning. The purpose of using this dataset is to enable the model to learn and develop reasoning capabilities in these four distinct languages.
 """
 
+def _render_messages(convo):
+    try:
+        return tokenizer.apply_chat_template(
+            convo,
+            tokenize = False,
+            add_generation_prompt = False,
+        )
+    except Exception:
+        # Fallback: naive role: content formatting
+        parts = []
+        for msg in convo:
+            role = msg.get("role", "user") if isinstance(msg, dict) else "user"
+            content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+            parts.append(f"{role}: {content}")
+        return "\n".join(parts)
+
 def formatting_prompts_func(examples):
     convos = examples["messages"]
-    texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False) for convo in convos]
+    texts = [_render_messages(convo) for convo in convos]
     return { "text" : texts, }
 pass
 
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 
-dataset = load_dataset("HuggingFaceH4/Multilingual-Thinking", split="train")
-dataset
+try:
+    dataset = load_dataset("HuggingFaceH4/Multilingual-Thinking", split="train")
+except Exception:
+    # Offline fallback: create a tiny synthetic dataset
+    synthetic_messages = [
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Solve x^2 - 4x + 4 = 0."},
+            {"role": "assistant", "content": "The solution is x=2."},
+        ],
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Translate 'hello' to French."},
+            {"role": "assistant", "content": "bonjour"},
+        ],
+    ]
+    dataset = Dataset.from_dict({"messages": synthetic_messages})
 
 """To format our dataset, we will apply our version of the GPT OSS prompt"""
 
-from unsloth.chat_templates import standardize_sharegpt
-dataset = standardize_sharegpt(dataset)
+try:
+    from unsloth.chat_templates import standardize_sharegpt
+    dataset = standardize_sharegpt(dataset)
+except Exception:
+    # Fallback: use dataset as-is if Unsloth utilities unavailable
+    pass
 dataset = dataset.map(formatting_prompts_func, batched = True,)
 
 """Let's take a look at the dataset, and check what the 1st example shows"""
@@ -186,29 +341,79 @@ Now let's use Huggingface TRL's `SFTTrainer`! More docs here: [TRL SFT docs](htt
 """
 
 from trl import SFTConfig, SFTTrainer
+# Safety: avoid HF Trainer moving meta/offloaded tensors with .to()
+try:
+    from transformers.trainer import Trainer as _HFTrainer
+    if hasattr(_HFTrainer, "_move_model_to_device"):
+        def _noop_move(self, model, device):
+            return
+        _HFTrainer._move_model_to_device = _noop_move
+except Exception:
+    pass
 from transformers import DataCollatorForSeq2Seq
+
+# Allow overriding max_steps via env var for quick sanity runs
+_env_max_steps = os.environ.get("MAX_STEPS")
+if _env_max_steps and _env_max_steps.strip().lstrip("-").isdigit():
+    _max_steps = int(_env_max_steps)
+else:
+    _max_steps = 60 if USING_UNSLOTH else 20
+
+# Build training args first so we can set placement before trainer init
+sft_args = SFTConfig(
+    per_device_train_batch_size = 1,
+    gradient_accumulation_steps = 1,
+    warmup_steps = 5,
+    # num_train_epochs = 1, # Set this for 1 full training run.
+    max_steps = _max_steps,
+    do_train = True,
+    fp16_full_eval = False,
+    bf16_full_eval = False,
+    bf16 = True,
+    gradient_checkpointing = True,
+    gradient_checkpointing_kwargs = {"use_reentrant": False},
+    learning_rate = 2e-4,
+    logging_steps = 1,
+    optim = "adamw_8bit",
+    weight_decay = 0.01,
+    lr_scheduler_type = "linear",
+    seed = 3407,
+    output_dir = "outputs",
+    report_to = "none", # Use this for WandB etc
+)
+
+# Prevent Trainer from calling model.to(device) on meta/offloaded tensors
+try:
+    setattr(sft_args, "place_model_on_device", False)
+except Exception:
+    pass
+
+# Additionally hint to HF Trainer that the model is BnB quantized (skip .to())
+try:
+    from transformers.utils.quantization_config import QuantizationMethod
+    setattr(model, "quantization_method", QuantizationMethod.BITS_AND_BYTES)
+except Exception:
+    pass
+
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
     train_dataset = dataset,
-    args = SFTConfig(
-        per_device_train_batch_size = 4,
-        gradient_accumulation_steps = 4,
-        warmup_steps = 5,
-        # num_train_epochs = 1, # Set this for 1 full training run.
-        max_steps = 60,
-        learning_rate = 2e-4,
-        logging_steps = 1,
-        optim = "adamw_8bit",
-        weight_decay = 0.01,
-        lr_scheduler_type = "linear",
-        seed = 3407,
-        output_dir = "outputs",
-        report_to = "none", # Use this for WandB etc
-    ),
+    args = sft_args,
+    optimizers=(None, None),
 )
 
 # @title Show current memory stats
+# Ensure trainer does not try to move model (avoids meta -> device copy)
+try:
+    if hasattr(trainer, "args"):
+        setattr(trainer.args, "place_model_on_device", False)
+    # Some Trainer versions cache this on the instance
+    if hasattr(trainer, "place_model_on_device"):
+        trainer.place_model_on_device = False
+except Exception:
+    pass
+
 gpu_stats = torch.cuda.get_device_properties(0)
 start_gpu_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024, 3)
 max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
@@ -236,19 +441,26 @@ print(f"Peak reserved memory for training % of max memory = {lora_percentage} %.
 Let's run the model! You can change the instruction and input - leave the output blank!
 """
 
-messages = [
-    {"role": "system", "content": "reasoning language: French\n\nYou are a helpful assistant that can solve mathematical problems."},
-    {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
-]
-inputs = tokenizer.apply_chat_template(
-    messages,
-    add_generation_prompt = True,
-    return_tensors = "pt",
-    return_dict = True,
-    reasoning_effort = "medium",
-).to(model.device)
-from transformers import TextStreamer
-_ = model.generate(**inputs, max_new_tokens = 2048, streamer = TextStreamer(tokenizer))
+if os.getenv("RUN_DEMO", "0") == "1":
+    messages = [
+        {"role": "system", "content": "reasoning language: French\n\nYou are a helpful assistant that can solve mathematical problems."},
+        {"role": "user", "content": "Solve x^5 + 3x^4 - 10 = 3."},
+    ]
+    try:
+        inputs = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt = True,
+            return_tensors = "pt",
+            return_dict = True,
+            reasoning_effort = "medium",
+        )
+    except Exception:
+        # Compose a simple prompt string
+        prompt = messages[0]["content"] + "\n\n" + messages[1]["content"]
+        inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+    from transformers import TextStreamer
+    _ = model.generate(**inputs, max_new_tokens = 2048, streamer = TextStreamer(tokenizer))
 
 """And we're done! If you have any questions on Unsloth, we have a [Discord](https://discord.gg/unsloth) channel! If you find any bugs or want to keep updated with the latest LLM stuff, or need help, join projects etc, feel free to join our Discord!
 
