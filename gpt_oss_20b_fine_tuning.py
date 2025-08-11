@@ -481,14 +481,23 @@ except Exception:
     pass
 
 _t_trn0 = time.time()
-trainer = SFTTrainer(
-    model = model,
-    tokenizer = tokenizer,
-    train_dataset = dataset,
-    args = sft_args,
-    optimizers=(None, None),
-)
-print(f"Trainer init took {time.time() - _t_trn0:.2f}s")
+trainer = None
+try:
+    trainer = SFTTrainer(
+        model = model,
+        tokenizer = tokenizer,
+        train_dataset = dataset,
+        args = sft_args,
+        optimizers=(None, None),
+    )
+    print(f"Trainer init took {time.time() - _t_trn0:.2f}s")
+except Exception as e:
+    print(f"Trainer init failed: {e}")
+    if os.getenv("FALLBACK_MANUAL_ON_FAIL", "1") == "1":
+        os.environ["MANUAL_STEP"] = "1"
+        print("Falling back to MANUAL_STEP=1...")
+        # Re-enter manual step block
+        pass
 
 # @title Show current memory stats
 # Ensure trainer does not try to move model (avoids meta -> device copy)
@@ -507,9 +516,18 @@ max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
 print(f"GPU = {gpu_stats.name}. Max memory = {max_memory} GB.")
 print(f"{start_gpu_memory} GB of memory reserved.")
 
-_t_train0 = time.time()
-trainer_stats = trainer.train()
-print(f"Trainer train() took {time.time() - _t_train0:.2f}s")
+if trainer is not None:
+    _t_train0 = time.time()
+    try:
+        trainer_stats = trainer.train()
+        print(f"Trainer train() took {time.time() - _t_train0:.2f}s")
+    except Exception as e:
+        print(f"Trainer train() failed: {e}")
+        if os.getenv("FALLBACK_MANUAL_ON_FAIL", "1") == "1":
+            os.environ["MANUAL_STEP"] = "1"
+            print("Falling back to MANUAL_STEP=1...")
+            # Will hit manual logic if re-run; for now, exit non-zero
+            sys.exit(1)
 
 if os.getenv("SAVE_ADAPTERS", "0") == "1":
     out_dir = os.environ.get("ADAPTER_OUTPUT_DIR", "outputs/lora_adapters")
