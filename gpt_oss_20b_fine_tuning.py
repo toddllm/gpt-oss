@@ -65,6 +65,7 @@ if SMOKE_MODE:
     # Prefer float16 compute for a lighter smoke path
     os.environ.setdefault("UNSLOTH_MIXED_PRECISION", "float16")
 import unsloth  # Must be imported before transformers so Unsloth patches apply
+import sys
 import torch
 """
 Workaround: Transformers 4.55 may try to initialize weights for
@@ -352,6 +353,44 @@ dataset = dataset.map(formatting_prompts_func, batched = True,)
 """Let's take a look at the dataset, and check what the 1st example shows"""
 
 print(dataset[0]['text'])
+
+# Optional ultra-minimal manual train step to avoid Trainer/Accelerate overhead
+if os.getenv("MANUAL_STEP", "0") == "1":
+    try:
+        model.train()
+        # Build a single micro-batch
+        num_samples = min(1, len(dataset))
+        texts = dataset.select(range(num_samples))["text"]
+        enc = tokenizer(
+            texts,
+            return_tensors="pt",
+            padding="longest",
+            truncation=True,
+            max_length=max_seq_length,
+        )
+        input_ids = enc["input_ids"].to(model.device)
+        attention_mask = enc.get("attention_mask")
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(model.device)
+        labels = input_ids.clone()
+
+        # Optimizer over only trainable (LoRA) parameters
+        trainable_params = [p for p in model.parameters() if getattr(p, "requires_grad", False)]
+        if len(trainable_params) == 0:
+            raise RuntimeError("No trainable parameters found for manual step.")
+        optimizer = torch.optim.AdamW(trainable_params, lr=2e-4)
+
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+        loss = outputs.loss
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        print(f"Manual step loss: {loss.item():.6f}")
+    except Exception as e:
+        print(f"Manual training step failed: {e}")
+        sys.exit(1)
+    # Exit after manual smoke step
+    sys.exit(0)
 
 """What is unique about GPT-OSS is that it uses OpenAI [Harmony](https://github.com/openai/harmony) format which support conversation structures, reasoning output, and tool calling.
 
