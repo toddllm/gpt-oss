@@ -416,6 +416,78 @@ if os.getenv("MANUAL_STEP", "0") == "1":
     # Exit after manual smoke step
     sys.exit(0)
 
+# Optional N-step manual training loop as robust fallback
+if os.getenv("MANUAL_LOOP", "0") == "1":
+    try:
+        model.train()
+        total_steps = int(os.getenv("MANUAL_STEPS", "10"))
+        per_device_bsz = int(os.getenv("MANUAL_BSZ", "1"))
+        grad_accum = int(os.getenv("MANUAL_GA", "1"))
+        learning_rate = float(os.getenv("MANUAL_LR", "2e-4"))
+
+        # Build iterable over texts
+        all_texts = dataset["text"] if "text" in dataset.column_names else []
+        if len(all_texts) == 0:
+            raise RuntimeError("Dataset missing 'text' column for manual loop.")
+
+        def batch_iter(texts, batch_size):
+            for i in range(0, len(texts), batch_size):
+                yield texts[i:i+batch_size]
+
+        trainable_params = [p for p in model.parameters() if getattr(p, "requires_grad", False)]
+        if len(trainable_params) == 0:
+            raise RuntimeError("No trainable parameters found for manual loop.")
+        optimizer = torch.optim.AdamW(trainable_params, lr=learning_rate)
+
+        step = 0
+        accum = 0
+        running_loss = 0.0
+
+        for epoch in range(10):  # cap epochs; we'll break when steps reached
+            for texts in batch_iter(all_texts, per_device_bsz):
+                enc = tokenizer(
+                    texts,
+                    return_tensors="pt",
+                    padding="longest",
+                    truncation=True,
+                    max_length=max_seq_length,
+                )
+                input_ids = enc["input_ids"].to(model.device)
+                attention_mask = enc.get("attention_mask")
+                if attention_mask is not None:
+                    attention_mask = attention_mask.to(model.device)
+                labels = input_ids.clone()
+
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                loss = outputs.loss / grad_accum
+                loss.backward()
+                running_loss += loss.item()
+                accum += 1
+
+                if accum % grad_accum == 0:
+                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
+                    step += 1
+                    print(f"[manual] step {step}/{total_steps} loss={running_loss:.6f}")
+                    running_loss = 0.0
+                    accum = 0
+                    if step >= total_steps:
+                        raise StopIteration
+        
+    except StopIteration:
+        pass
+    except Exception as e:
+        print(f"Manual training loop failed: {e}")
+        sys.exit(1)
+
+    if os.getenv("SAVE_ADAPTERS", "0") == "1":
+        out_dir = os.environ.get("ADAPTER_OUTPUT_DIR", "outputs/lora_adapters")
+        os.makedirs(out_dir, exist_ok=True)
+        model.save_pretrained(out_dir)
+        print(f"Saved LoRA adapters to: {out_dir}")
+
+    sys.exit(0)
+
 """What is unique about GPT-OSS is that it uses OpenAI [Harmony](https://github.com/openai/harmony) format which support conversation structures, reasoning output, and tool calling.
 
 <a name="Train"></a>
