@@ -11,6 +11,11 @@ export UNSLOTH_DISABLE_TORCH_COMPILE=1
 export ACCELERATE_BYPASS_DEVICE_MAP=true
 export RUN_DEMO=0
 export MAX_STEPS=1
+export SMOKE_MODE=1
+# Prefer eager attention to avoid kernel init overhead in smoke
+export ATTN_IMPL=eager
+# Shrink context for smoke
+export MAX_SEQ_LENGTH=1024
 
 # Optional: reduce memory further for smoke
 export UNSLOTH_FORCE_FLOAT32=0

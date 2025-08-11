@@ -59,6 +59,11 @@ os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("UNSLOTH_DISABLE_TORCH_COMPILE", "1")
 # Allow training with models loaded via device_map without Accelerate blocking
 os.environ.setdefault("ACCELERATE_BYPASS_DEVICE_MAP", "true")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+SMOKE_MODE = os.environ.get("SMOKE_MODE", "0") == "1"
+if SMOKE_MODE:
+    # Prefer float16 compute for a lighter smoke path
+    os.environ.setdefault("UNSLOTH_MIXED_PRECISION", "float16")
 import unsloth  # Must be imported before transformers so Unsloth patches apply
 import torch
 """
@@ -103,6 +108,12 @@ except Exception:
     pass
 
 max_seq_length = 4096
+# Allow overriding max seq length via env, and shrink in smoke mode
+_env_msl = os.environ.get("MAX_SEQ_LENGTH")
+if _env_msl and _env_msl.isdigit():
+    max_seq_length = int(_env_msl)
+elif SMOKE_MODE:
+    max_seq_length = 1024
 dtype = None
 
 # 4bit pre quantized models we support for 4x faster downloading + no OOMs.
@@ -149,7 +160,7 @@ if not USING_UNSLOTH:
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_compute_dtype=torch.float16 if SMOKE_MODE else torch.bfloat16,
     )
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
@@ -161,6 +172,15 @@ if not USING_UNSLOTH:
         offload_state_dict=False,
         max_memory={0: "20GiB"},
     )
+
+# Prefer eager attention for smoke to avoid kernel init overhead
+try:
+    if SMOKE_MODE or os.environ.get("ATTN_IMPL", "").lower() == "eager":
+        if hasattr(model, "config"):
+            model.config._attn_implementation = "eager"
+        os.environ["XFORMERS_DISABLED"] = "1"
+except Exception:
+    pass
 
 """We now add LoRA adapters for parameter efficient finetuning - this allows us to only efficiently train 1% of all parameters."""
 
@@ -369,9 +389,11 @@ sft_args = SFTConfig(
     do_train = True,
     fp16_full_eval = False,
     bf16_full_eval = False,
-    bf16 = True,
+    bf16 = False if SMOKE_MODE else True,
+    fp16 = True if SMOKE_MODE else False,
     gradient_checkpointing = True,
     gradient_checkpointing_kwargs = {"use_reentrant": False},
+    dataset_num_proc = 1,
     learning_rate = 2e-4,
     logging_steps = 1,
     optim = "adamw_8bit",
