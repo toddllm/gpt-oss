@@ -66,6 +66,7 @@ if SMOKE_MODE:
     os.environ.setdefault("UNSLOTH_MIXED_PRECISION", "float16")
 import unsloth  # Must be imported before transformers so Unsloth patches apply
 import sys
+import time
 import torch
 """
 Workaround: Transformers 4.55 may try to initialize weights for
@@ -128,8 +129,18 @@ fourbit_models = [
 LOCAL_MODEL_DIR = "/home/tdeshane/gpt-oss/gpt-oss-20b-final"
 MODEL_NAME = os.environ.get("MODEL_DIR", LOCAL_MODEL_DIR if os.path.isdir(LOCAL_MODEL_DIR) else "unsloth/gpt-oss-20b")
 
+# Mode selection: manual|smoke|full
+MODE = os.environ.get("MODE", "").lower()
+if MODE == "manual":
+    os.environ["MANUAL_STEP"] = "1"
+elif MODE == "smoke":
+    os.environ["SMOKE_MODE"] = "1"
+    os.environ.setdefault("MAX_STEPS", "1")
+
 USE_UNSLOTH = os.environ.get("ENABLE_UNSLOTH", "0") == "1"
 USING_UNSLOTH = False
+
+_t0 = time.time()
 
 if USE_UNSLOTH:
     try:
@@ -174,6 +185,8 @@ if not USING_UNSLOTH:
         max_memory={0: "20GiB"},
     )
 
+print(f"Model+tokenizer load took {time.time() - _t0:.2f}s")
+
 # Prefer eager attention for smoke to avoid kernel init overhead
 try:
     if SMOKE_MODE or os.environ.get("ATTN_IMPL", "").lower() == "eager":
@@ -186,6 +199,7 @@ except Exception:
 """We now add LoRA adapters for parameter efficient finetuning - this allows us to only efficiently train 1% of all parameters."""
 
 if USING_UNSLOTH:
+    _t_peft0 = time.time()
     model = FastLanguageModel.get_peft_model(
         model,
         r = 8, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
@@ -200,8 +214,10 @@ if USING_UNSLOTH:
         use_rslora = False,  # We support rank stabilized LoRA
         loftq_config = None, # And LoftQ
     )
+    print(f"LoRA PEFT wrap took {time.time() - _t_peft0:.2f}s")
 else:
     from peft import LoraConfig, get_peft_model
+    _t_peft0 = time.time()
     lora_config = LoraConfig(
         r=8,
         lora_alpha=16,
@@ -211,6 +227,7 @@ else:
         task_type="CAUSAL_LM",
     )
     model = get_peft_model(model, lora_config)
+    print(f"LoRA PEFT wrap took {time.time() - _t_peft0:.2f}s")
 
 """### Reasoning Effort
 The `gpt-oss` models from OpenAI include a feature that allows users to adjust the model's "reasoning effort." This gives you control over the trade-off between the model's performance and its response speed (latency) which by the amount of token the model will use to think.
@@ -342,6 +359,7 @@ except Exception:
 
 """To format our dataset, we will apply our version of the GPT OSS prompt"""
 
+_t_data0 = time.time()
 try:
     from unsloth.chat_templates import standardize_sharegpt
     dataset = standardize_sharegpt(dataset)
@@ -349,6 +367,7 @@ except Exception:
     # Fallback: use dataset as-is if Unsloth utilities unavailable
     pass
 dataset = dataset.map(formatting_prompts_func, batched = True,)
+print(f"Dataset standardize+format took {time.time() - _t_data0:.2f}s")
 
 """Let's take a look at the dataset, and check what the 1st example shows"""
 
@@ -386,6 +405,11 @@ if os.getenv("MANUAL_STEP", "0") == "1":
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
         print(f"Manual step loss: {loss.item():.6f}")
+        if os.getenv("SAVE_ADAPTERS", "0") == "1":
+            out_dir = os.environ.get("ADAPTER_OUTPUT_DIR", "outputs/lora_adapters")
+            os.makedirs(out_dir, exist_ok=True)
+            model.save_pretrained(out_dir)
+            print(f"Saved LoRA adapters to: {out_dir}")
     except Exception as e:
         print(f"Manual training step failed: {e}")
         sys.exit(1)
@@ -456,6 +480,7 @@ try:
 except Exception:
     pass
 
+_t_trn0 = time.time()
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
@@ -463,6 +488,7 @@ trainer = SFTTrainer(
     args = sft_args,
     optimizers=(None, None),
 )
+print(f"Trainer init took {time.time() - _t_trn0:.2f}s")
 
 # @title Show current memory stats
 # Ensure trainer does not try to move model (avoids meta -> device copy)
@@ -481,7 +507,15 @@ max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
 print(f"GPU = {gpu_stats.name}. Max memory = {max_memory} GB.")
 print(f"{start_gpu_memory} GB of memory reserved.")
 
+_t_train0 = time.time()
 trainer_stats = trainer.train()
+print(f"Trainer train() took {time.time() - _t_train0:.2f}s")
+
+if os.getenv("SAVE_ADAPTERS", "0") == "1":
+    out_dir = os.environ.get("ADAPTER_OUTPUT_DIR", "outputs/lora_adapters")
+    os.makedirs(out_dir, exist_ok=True)
+    model.save_pretrained(out_dir)
+    print(f"Saved LoRA adapters to: {out_dir}")
 
 # @title Show final memory and time stats
 used_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024, 3)
